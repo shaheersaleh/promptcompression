@@ -32,3 +32,13 @@ logs/
 cache/
 data/train_full.jsonl
 data/*
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.synctex.gz

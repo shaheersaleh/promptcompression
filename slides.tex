@@ -1,0 +1,236 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% Theme & Styling
+\usetheme{Boadilla}
+\usecolortheme{whale}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% Essential Packages
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{microtype}
+
+% Meta Information
+\title[Trajectory RL Prompt Compression]{Trajectory-Aware Reinforcement Learning for\\Discrete Prompt Compression}
+\subtitle{Thesis Defense Presentation}
+\author[M. S. Saleh]{Muhammad Shaheer Saleh}
+\institute[SEECS, NUST]{School of Electrical Engineering and Computer Science (SEECS)\\National University of Sciences and Technology (NUST)}
+\date{\today}
+
+\begin{document}
+
+% -------------------------------------------------------------
+% SLIDE 1: Title Slide
+% -------------------------------------------------------------
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 2: Context & Motivation
+% -------------------------------------------------------------
+\begin{frame}{Motivation: The LLM Context Bottleneck}
+  \begin{itemize}
+    \item \textbf{Inference Cost Scaling:} Quadratic complexity in self-attention ($\mathcal{O}(N^2)$) and linear KV-cache growth impose severe latency and VRAM constraints.
+    \item \textbf{Linguistic Redundancy:} Real-world prompts contain substantial syntactic padding, boilerplate, and low-information tokens that do not contribute to downstream reasoning.
+    \item \textbf{The Core Objective:} Learn an upstream, lightweight editor that physically prunes uninformative prompt tokens before downstream execution.
+    \item \textbf{Core Challenge:} Preserving downstream target accuracy and generation distribution without modifying or fine-tuning massive downstream model parameters.
+  \end{itemize}
+  \vspace{0.3cm}
+  \begin{block}{Thesis Goal}
+    Develop a discrete, trajectory-aware prompt pruning framework that enforces hard token deletion while supervising upstream policies via dense downstream causal probability divergence.
+  \end{block}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 3: Masking Paradigms: Hard vs. Soft
+% -------------------------------------------------------------
+\begin{frame}{Discrete Hard Masking vs. Continuous Soft Masking}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Soft Continuous Masks} ($w_i \in [0, 1]$)
+      \begin{itemize}
+        \item Continuous attention scaling or Gumbel-Softmax relaxations.
+        \item \textbf{Fatal Flaw:} Requires thresholding at test time to physically drop tokens.
+        \item Induces severe \textbf{train-test distribution shift} leading to generation collapse.
+        \item Downstream KV cache is still allocated during continuous training.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Discrete Hard Masks} ($m_i \in \{0, 1\}$)
+      \begin{itemize}
+        \item Tokens are strictly retained ($1$) or physically deleted ($0$).
+        \item Zero train-test discrepancy: what the policy selects during training is physically passed at test time.
+        \item \textbf{Optimization Challenge:} Non-differentiable step function prevents standard backpropagation.
+        \item \textbf{Solution:} Supervised via policy gradient reinforcement learning (REINFORCE).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 4: Decoupled Upstream-Downstream Framework
+% -------------------------------------------------------------
+\begin{frame}{Upstream-Downstream Decoupled Architecture}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Upstream Policy Network (Trainable)}
+        \begin{itemize}
+          \item \textbf{Backbone:} XLM-RoBERTa (560M parameters).
+          \item \textbf{Role:} Emits independent retention probabilities $\pi_\theta(m_i = 1 \mid X)$ for each prompt token.
+          \item Samples binary decision vector $m \in \{0, 1\}^N$.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Downstream Target LM (100\% Frozen)}
+        \begin{itemize}
+          \item \textbf{Backbone:} Microsoft Phi-4 (14B parameters).
+          \item \textbf{Quantization:} 4-bit NormalFloat (NF4).
+          \item \textbf{Role:} Evaluates pruned prompt $X'$ and target sequence $Y$ without backpropagation.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.4cm}
+  \centering
+  \textbf{Workflow:} $X \xrightarrow{\text{XLM-R}} m \in \{0, 1\}^N \xrightarrow{\text{Prune}} X' \xrightarrow{\text{Phi-4 (Frozen)}} P(y_t \mid y_{<t}, X')$
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 5: Dense Trajectory Supervision vs. Sparse Rewards
+% -------------------------------------------------------------
+\begin{frame}{Trajectory-Aware Dense Reward Formulation}
+  \begin{itemize}
+    \item \textbf{Sparse Reward Failure:} Metrics like final BLEU or Exact Match assign a single scalar at sequence end, failing to identify \emph{which} dropped prompt token caused the failure.
+    \item \textbf{Dense Trajectory Divergence:} We penalize distribution shift across the entire reference answer trajectory ($t = 1 \dots T$):
+  \end{itemize}
+  \vspace{-0.2cm}
+  $$\mathcal{R}_{\mathrm{traj}}(X, m) = - \frac{1}{T} \sum_{t=1}^T D_{\mathrm{KL}}\Big( P_{\mathrm{frozen}}(\cdot \mid y_{<t}, X) \;\parallel\; P_{\mathrm{frozen}}(\cdot \mid y_{<t}, X') \Big) + \beta \cdot \mathcal{R}_{\mathrm{length}}(m)$$
+  \begin{itemize}
+    \item \textbf{Single-Pass Causal Computation:} Evaluated in a single forward pass over target tokens using causal masking—no iterative autoregressive generation required during training.
+    \item \textbf{Credit Assignment:} Early tokens ($t=1\dots 4$, entity heads) vs. late tokens ($t \ge 10$, terminal syntax) are individually trackable.
+  \end{itemize}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 6: Discrete Policy Optimization via REINFORCE
+% -------------------------------------------------------------
+\begin{frame}{Policy Gradient Optimization}
+  \begin{itemize}
+    \item Let prompt tokens be $X = (x_1, \dots, x_N)$. The policy outputs independent retention Bernoulli probabilities:
+    $$\pi_\theta(m \mid X) = \prod_{i=1}^N \pi_\theta(m_i \mid X)$$
+    \item The policy objective maximizes expected trajectory reward and compression incentive:
+    $$J(\theta) = \mathbb{E}_{m \sim \pi_\theta}\left[ \mathcal{R}_{\mathrm{traj}}(X, m) \right]$$
+    \item \textbf{REINFORCE Gradient Estimator with Baseline Subtraction:}
+    $$\nabla_\theta J(\theta) = \mathbb{E}_{m \sim \pi_\theta}\left[ \sum_{i=1}^N \nabla_\theta \log \pi_\theta(m_i \mid X) \cdot \big(\mathcal{R}_{\mathrm{traj}}(X, m) - b(X)\big) \right]$$
+    where baseline $b(X)$ reduces gradient variance across training batches.
+  \end{itemize}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 7: Distributed 4-GPU Architecture
+% -------------------------------------------------------------
+\begin{frame}{Distributed Scaling via PyTorch DDP All-Reduce}
+  \begin{itemize}
+    \item \textbf{Sentence Diversity:} Unlike single-GPU rollouts (TACO-RL), 4-GPU DDP processes 4 distinct context-question pairs concurrently across devices.
+    \item \textbf{Independent Actions:} Discrete pruning masks $m^{(k)}$ are sampled independently on GPU $k$ and are \textbf{never averaged}.
+    \item \textbf{NCCL Gradient All-Reduce:} Gradients are synchronized and averaged across all workers:
+    $$\bar{\nabla}_\theta = \frac{1}{4} \sum_{k=1}^4 \nabla_\theta \mathcal{L}_k(\theta)$$
+  \end{itemize}
+  \begin{block}{Why This Matters}
+    Synchronizing policy gradients rather than action distributions ensures that the upstream policy generalises across diverse syntactic patterns while preserving discrete token decisions.
+  \end{block}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 8: Experimental Setup & Evaluation Protocol
+% -------------------------------------------------------------
+\begin{frame}{Experimental Setup}
+  \begin{itemize}
+    \item \textbf{Dataset:} SQuAD reading comprehension benchmark (passages + context questions).
+    \item \textbf{Upstream Editor:} XLM-RoBERTa (560M), learning rate $1\times 10^{-5}$, linear $\beta=0.5$ length penalty.
+    \item \textbf{Downstream Target:} Microsoft Phi-4 (14B, 4-bit NF4), 100\% frozen parameters.
+    \item \textbf{Compared Regimes:}
+      \begin{enumerate}
+        \item \textbf{Token-0 Baseline:} Sparse supervision targeting only the first answer token (300 steps).
+        \item \textbf{Traj RL (1-GPU):} Dense trajectory supervision on single GPU (300 steps).
+        \item \textbf{Traj RL (4-GPU):} Distributed 4-GPU DDP with NCCL All-Reduce (300 steps).
+        \item \textbf{Traj RL Full (87k):} High-budget scaling run (21.9k steps / 87k total sample passes).
+      \end{enumerate}
+  \end{itemize}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 9: Macro Benchmark Results
+% -------------------------------------------------------------
+\begin{frame}{Macro Benchmark Results}
+  \begin{table}[ht]
+    \centering
+    \small
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{lcccccc}
+      \toprule
+      \textbf{Model / Experiment} & \textbf{Steps} & \textbf{Drop Rate} & \textbf{Downstream F1} & \textbf{EM (\%)} & \textbf{Step $t=4$ Drift} & \textbf{Step $t=10$ Drift} \\
+      \midrule
+      Token-0 Baseline        & 300    & 74.14\% & 0.5991 & 6.7\%  & 1.5340 & 1.1162 \\
+      Traj RL (1-GPU)         & 300    & 20.77\% & 0.7978 & 46.7\% & 0.4017 & \textbf{0.0658} \\
+      \textbf{Traj RL (4-GPU)}& \textbf{300} & \textbf{46.94\%} & \textbf{0.7542} & \textbf{33.3\%} & \textbf{0.9309} & \textbf{0.3560} \\
+      Traj RL Full (87k)      & 21.9k  & 75.93\% & 0.5772 & 6.7\%  & \textbf{0.2412} & 1.2952 \\
+      \bottomrule
+    \end{tabular}
+    }
+  \end{table}
+  \begin{itemize}
+    \item \textbf{Token-0 Failure:} Prunes aggressively (74.14\%) but degrades F1 and EM due to lack of trajectory feedback.
+    \item \textbf{Traj RL 4-GPU Pareto Efficiency:} Achieves a balanced trade-off—prunes \textbf{46.94\% of tokens} while retaining a strong \textbf{0.7542 F1} and \textbf{33.3\% Exact Match}.
+  \end{itemize}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 10: Policy Saturation & The Hallucination Cliff
+% -------------------------------------------------------------
+\begin{frame}{The 87k Run: Policy Saturation \& Hallucination Cliff}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{block}{What Happened at 87k Steps?}
+        \begin{itemize}
+          \item Training with static $\beta = 0.5$ length penalty caused the policy to prioritize token deletion over preservation.
+          \item Compression climbed to \textbf{75.93\% drop}, but Exact Match collapsed to \textbf{6.7\%}.
+        \end{itemize}
+      \end{block}
+      \textbf{Trajectory Divergence Analysis:}
+      \begin{itemize}
+        \item Early step drift ($t=4$) remained very low: \textbf{0.2412} (entity heads preserved).
+        \item Late step drift ($t=10$) exploded to \textbf{1.2952} (syntactic context destroyed).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{alertblock}{Theoretical Takeaway}
+        Over-pruning removes supporting syntactic framing. While the model correctly initiates generation, the lack of context triggers autoregressive drift and hallucinations.
+      \end{alertblock}
+      \vspace{0.2cm}
+      \textbf{Remedy:} Requires dynamic $\beta$-annealing or early stopping once Pareto inflection is reached.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -------------------------------------------------------------
+% SLIDE 11: Conclusion & Key Contributions
+% -------------------------------------------------------------
+\begin{frame}{Conclusion \& Contributions}
+  \begin{enumerate}
+    \item \textbf{Discrete Prompt Pruning Formulation:} Validated that hard binary masks ($m \in \{0, 1\}^N$) trained via REINFORCE eliminate test-time distribution collapse inherent to soft masks.
+    \item \textbf{Dense Trajectory Supervision:} Replaced uninformative sequence-level rewards with step-wise causal $D_{\mathrm{KL}}$ trajectory loss, enabling fine-grained credit assignment.
+    \item \textbf{Distributed Exploration:} Demonstrated that 4-GPU DDP gradient All-Reduce discovers robust pruning policies, achieving \textbf{46.94\% compression} with \textbf{0.7542 F1}.
+    \item \textbf{Identified Policy Saturation Dynamics:} Documented the 87k hallucination cliff, establishing the necessity of dynamic length-penalty scheduling in RL-based compression.
+  \end{enumerate}
+  \vspace{0.3cm}
+  \centering
+  \textbf{Thank you. Questions?}
+\end{frame}
+
+\end{document}
