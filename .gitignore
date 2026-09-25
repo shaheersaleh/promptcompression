@@ -31,3 +31,4 @@ logs/
 *.vrb
 cache/
 data/train_full.jsonl
+data/*
