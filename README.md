@@ -1,5 +1,6 @@
 # Trajectory-Aware Reinforcement Learning for Discrete Prompt Compression
 
+<<<<<<< Updated upstream
 Official implementation of **Trajectory-Aware Reinforcement Learning for Discrete Prompt Compression**. 
 
 This repository provides an upstream-downstream reinforcement learning framework that trains an **XLM-RoBERTa (560M)** policy network to perform hard discrete token pruning ($m \in \{0, 1\}^N$). The policy is supervised by dense, step-by-step Kullback-Leibler divergence ($D_{\mathrm{KL}}$) computed over the causal answer generation trajectory of a completely frozen downstream **Microsoft Phi-4 (14B, 4-bit NF4)** language model.
@@ -139,10 +140,15 @@ python run_comprehensive_audit.py \
 
 * **Outputs Generated:** A structured JSONL audit file containing exact drop rates, downstream Exact Match (EM), token F1, and step-level divergence metrics ($D_{\mathrm{KL}}$ for steps $t = 1 \dots 10$).
 
+=======
+An upstream-downstream reinforcement learning framework for discrete prompt compression. An **XLM-RoBERTa (560M)** policy learns discrete binary token deletion masks ($m \in \{0, 1\}^N$) supervised by dense step-wise trajectory Kullback-Leibler divergence ($D_{\mathrm{KL}}$) against a frozen downstream **Microsoft Phi-4 (14B, 4-bit NF4)** model.
+
+>>>>>>> Stashed changes
 ---
 
-## Macro Benchmark Results
+## Repository Structure & File Manifest
 
+<<<<<<< Updated upstream
 The following table compares the baseline method against single-GPU, 4-GPU DDP, and full-scale 87k scaling configurations evaluated against downstream Microsoft Phi-4 (14B NF4):
 
 | Metric | Token-0 Base | Traj RL (1-GPU) | Traj RL (4-GPU) | Traj RL (87k Full) |
@@ -197,3 +203,38 @@ pdflatex slides.tex  # Second pass resolves layout metrics and slide numbers
 **Muhammad Shaheer Saleh**  
 Computer Science Graduate Studies  
 Research focus: Reinforcement Learning, Prompt Optimization, LLM Interpretability.
+=======
+| File | Purpose | Input / Dependencies | Output Produced |
+| :--- | :--- | :--- | :--- |
+| `compare_all.py` | Master evaluation aggregator across all runs | The 4 `.jsonl` audit files | Console benchmark table, `evaluation_results.md`, `evaluation_results.csv` |
+| `audit_results_ddp.jsonl` | Audit metrics for Traj RL 4-GPU (300 steps) | Checkpoint evaluation | Per-sample token retention, $D_{\mathrm{KL}}$ divergence, EM/F1 |
+| `audit_results_ddp_full.jsonl` | Audit metrics for Traj RL 87k (21.9k steps) | Checkpoint evaluation | High-compression saturation metrics & drift trajectory |
+| `audit_results_trajectory_rl.jsonl` | Audit metrics for Traj RL 1-GPU (300 steps) | Checkpoint evaluation | Single-GPU baseline metrics |
+| `comprehensive_audit_results.jsonl` | Audit metrics for Token-0 Baseline (300 steps) | Checkpoint evaluation | Sparse reward baseline metrics |
+| `distribution_comparison.png` | Trajectory divergence visualization | Audit logs | Multi-step causal drift plot ($t = 1 \dots 10$) |
+| `prepare_full_squad.py` | Preprocesses full SQuAD train/val splits | Raw Hugging Face SQuAD | `data/train_full.jsonl` (161 MB) |
+| `data/train.jsonl` | 356 KB sample dataset | None (included) | Ready-to-run prompt subset for quick testing |
+| `train_trajectory_reinforce_ddp.py` | Distributed 4-GPU REINFORCE training engine | PyTorch DDP, Phi-4, dataset | Checkpoints in `checkpoints/`, loss logs |
+| `train_trajectory_reinforce.py` | Single-GPU baseline trainer | Single GPU, Phi-4, dataset | Checkpoints in `checkpoints/` |
+| `train_multigpu.sh` | Slurm launcher for 4-GPU DDP training | Slurm cluster / bash | Distributed training execution across 4 GPUs |
+| `run_comprehensive_audit.py` | Evaluates checkpoints on answer trajectory $D_{\mathrm{KL}}$ | Model checkpoint, Phi-4 | Detailed per-sample JSONL audit log |
+| `run_audit_full.sh` | Batch audit runner script | Slurm cluster / bash | Automated execution of `run_comprehensive_audit.py` |
+| `requirements.txt` | Complete frozen Python environment | pip | Reproducible environment installation |
+
+---
+
+## Workflow: What to Run & What It Produces
+[ audit_results_*.jsonl ]
+                       │
+                       ▼ (python compare_all.py)
+          ┌───────────────────────────┐
+          │ 4-Way Macro Benchmark     │
+          │ evaluation_results.md/.csv│
+          └───────────────────────────┘
+### 1. Instant Benchmark Reproduction (No GPUs Required)
+To verify the paper's benchmark tables immediately from the audited results:
+
+```bash
+python compare_all.py
+eof
+>>>>>>> Stashed changes
