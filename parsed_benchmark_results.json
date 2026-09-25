@@ -1,0 +1,30 @@
+[
+  {
+    "sample_id": 1,
+    "query": "The Virgin Mary allegedly appeared to Saint Bernadette",
+    "uncompressed_context": "",
+    "uncompressed_answer": "",
+    "compressed_context": "",
+    "compressed_answer": "",
+    "uncompressed_tokens": 211,
+    "compressed_tokens": 90,
+    "drop_rate_pct": 57.3,
+    "likelihood_ratio": null,
+    "f1": null,
+    "em": null
+  },
+  {
+    "sample_id": 2,
+    "query": "In front of the Notre Dame Main Building is a",
+    "uncompressed_context": "",
+    "uncompressed_answer": "",
+    "compressed_context": "",
+    "compressed_answer": "",
+    "uncompressed_tokens": 204,
+    "compressed_tokens": 83,
+    "drop_rate_pct": 59.3,
+    "likelihood_ratio": null,
+    "f1": null,
+    "em": null
+  }
+]

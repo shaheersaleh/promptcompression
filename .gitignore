@@ -1,0 +1,33 @@
+# Virtual environment & caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+.cache/
+
+# Large model checkpoints (>100MB)
+checkpoints/
+*.pt
+*.bin
+*.safetensors
+
+# Large training datasets & cached arrow tables
+data/*.arrow
+data/train_full.jsonl
+*.parquet
+
+# Cluster logs
+logs/
+*.out
+*.err
+
+# LaTeX auxiliary files (keep only .tex and final .pdf)
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+cache/
+data/train_full.jsonl
